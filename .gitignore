@@ -1,0 +1,6 @@
+/train_data
+*.wav
+*/phoneme_cache
+*/run-*
+metadata.csv
+.DS_Store
