@@ -23,7 +23,8 @@ pip install -r requirements.txt
 
 Google Drive: [Link](https://drive.google.com/drive/folders/1hcGMAh-Td2u_4zZ1y9H0RZqA7yz80WLh?usp=sharing)
 
-위 링크를 통해 파일을 다운로드 받으신 뒤 `tts/model` 디렉토리에 넣어주세요.
+위 링크를 통해 파일을 다운로드 받으신 뒤 'glowtts_model.pth'와 'glowtts_model.json' 파일을 `tts/model` 디렉토리에 넣어주세요.
+`run-*` 폴더를 `tts` 디렉토리에 넣어주세요.
 
 ## 사용 방법
 

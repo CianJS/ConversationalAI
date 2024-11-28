@@ -1,5 +1,6 @@
 import os
 import torch
+import torch.nn.functional as F
 import sounddevice as sd
 
 # from TTS.api import TTS
@@ -24,6 +25,7 @@ vocoder = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan")
 base_path = os.path.dirname(os.path.abspath(__file__))
 glowtts_model_path = os.path.join(base_path, "model/glowtts_model.pth")
 glowtts_config_path = os.path.join(base_path, "model/glowtts_config.json")
+dataset_path = os.path.join(base_path, "../train_data/")
 
 
 # Glow-TTS 모델 로드 함수
@@ -35,98 +37,69 @@ def load_glowtts(model_path, config_path):
     tokenizer, config = TTSTokenizer.init_from_config(config)
 
     model = GlowTTS(config, ap, tokenizer)
-    model.load_state_dict(torch.load(model_path, map_location="cpu", weights_only=True))
+    model.load_state_dict(torch.load(model_path, map_location="cpu"))
     model.eval()
+
     return model, tokenizer
 
-# def load_glowtts_model():
-#     config = GlowTTSConfig()
-#     config.load_json(file_name=glowtts_config_path)
-#     ap = AudioProcessor.init_from_config(config)
+
+# 텍스트를 mel-spectrogram으로 변환
+def text_to_mel(text, model, tokenizer):
+    # 텍스트를 토큰 ID로 변환
+    token_ids = tokenizer.text_to_ids(text)
     
-#     # Tokenizer 초기화
-#     tokenizer, config = TTSTokenizer.init_from_config(config)
+    # 토큰 ID를 텐서로 변환
+    tokens = torch.tensor([token_ids], dtype=torch.long)
+    lengths = torch.tensor([len(token_ids)], dtype=torch.long)
 
-#     model = GlowTTS(config, ap)
-#     model.load_state_dict(torch.load(glowtts_model_path, map_location="cpu", weights_only=True))
-#     model.eval()
-#     return model, ap, tokenizer
+    # 입력 길이를 384로 맞추기 (Padding or Truncation)
+    max_length = 384
+    if tokens.size(1) < max_length:
+        tokens = F.pad(tokens, (0, max_length - tokens.size(1)), "constant", 0)
+    else:
+        tokens = tokens[:, :max_length]
+    
+    # Conv1D와 호환되도록 텐서 차원 조정
+    tokens = tokens.unsqueeze(1).permute(0, 2, 1)  # [batch_size, length, channels]
+
+    # Glow-TTS 모델을 사용해 mel-spectrogram 생성
+    with torch.no_grad():
+        outputs = model.inference(x=tokens, aux_input={"d_vectors": None, "speaker_ids": None, "x_lengths": lengths})
+    
+    # 결과에서 mel-spectrogram 추출
+    mel_spectrogram = outputs["mel_post"].squeeze(0).cpu().numpy()
+    return mel_spectrogram
 
 
-# 텍스트를 음성으로 변환하는 함수
+# 텍스트를 음성으로 변환
 def synthesize_speech(text):
-    # Glow-TTS 모델 및 설정 로드
-    glowtts_model, tokenizer = load_glowtts(glowtts_model_path, glowtts_config_path)
-    print(glowtts_model.embedded_speaker_dim)
+    # Glow-TTS 모델과 토크나이저 로드
+    model, tokenizer = load_glowtts(glowtts_model_path, glowtts_config_path)
 
-    # 1. 텍스트를 토큰화 및 음소화
-    text_sequence = tokenizer.encode(text)
-    text_tensor = torch.tensor([text_sequence], dtype=torch.long)
-    text_lengths = torch.tensor([text_tensor.size(1)], dtype=torch.long)
+    # 텍스트를 mel-spectrogram으로 변환
+    mel_spectrogram = text_to_mel(text, model, tokenizer)
 
-    print(text_tensor.shape)
-    print(text_lengths)
-
-    # 2. Glow-TTS를 사용하여 멜 스펙트로그램 생성
-    with torch.no_grad():
-        mel_outputs = glowtts_model.inference(x=text_tensor)
-    print('mel_outputs:', mel_outputs)
-
-    # 3. HiFi-GAN vocoder를 사용하여 wav 변환
-    with torch.no_grad():
-        wav = vocoder(mel_outputs)
-
-    print(wav)
-    return wav
+    # vocoder를 사용해 오디오 신호 생성
+    audio_signal = vocoder(mel_spectrogram)
+    return audio_signal
 
 
-def make_tts_file(answer):
-    # tts.voice_conversion_to_file(source_wav="tts/data/wavs/bae_korean2.wav", target_wav="tts/data/wavs/product_explain_bae.wav", file_path="output.wav")
+# def make_tts_file(answer):
+#     # tts.voice_conversion_to_file(source_wav="tts/data/wavs/bae_korean2.wav", target_wav="tts/data/wavs/product_explain_bae.wav", file_path="output.wav")
     
-    # tts.tts(
-    #     text=answer,
-    #     speaker_wav=wav_file_path,
-    #     language="ko",
-    #     file_path=output_file_path,
-    #     speed=2.0
-    # )
-    return tts.tts(
-        text=answer,
-        speaker_wav=wav_file_path,
-        language="ko",
-        speed=2.0,
-    )
-
-
-# 텍스트를 멜 스펙트로그램으로 변환하고 음성 신호를 생성하는 함수
-# def synthesize_speech(text):
-#     # GlowTTS 모델, AudioProcessor, Tokenizer 로드
-#     model, ap, tokenizer = load_glowtts_model()
-
-#     # 텍스트를 토크나이저로 처리
-#     tokens = tokenizer.text_to_ids(text)
-#     tokens = torch.LongTensor(tokens).unsqueeze(0)  # 배치 차원 추가
-#     print("Tokens shape:", tokens.shape)
-#     print("First token length:", len(tokens[0]))
-
-#     # 멜 스펙트로그램 생성
-#     with torch.no_grad():
-#         outputs = model.inference(tokens)
-#         print(outputs)
-#         print("GlowTTS inference completed successfully.")
-#         mel_post = outputs["mel_post"]  # 멜 스펙트로그램 가져오기
-#         print("Mel spectrogram shape:", mel_post.shape)
-
-#     try:
-#         # SpeechT5 HiFi-GAN을 사용해 음성 신호로 변환
-#         with torch.no_grad():
-#             wav = vocoder(mel_post)
-#             print("Vocoder synthesis completed successfully.")
-#     except Exception as e:
-#         print(f"Error during vocoder synthesis: {e}")
-#         return None, None
-
-#     return wav.cpu().numpy(), ap.sample_rate
+#     # tts.tts(
+#     #     text=answer,
+#     #     speaker_wav=wav_file_path,
+#     #     language="ko",
+#     #     file_path=output_file_path,
+#     #     speed=2.0
+#     # )
+#     return tts.tts(
+#         text=answer,
+#         speaker_wav=wav_file_path,
+#         language="ko",
+#         speed=2.0,
+#     )
 
 
 def play_audio(audio, sample_rate=22050):
