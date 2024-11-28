@@ -19,3 +19,4 @@ sounddevice==0.5.1
 python-mecab-ko-dic==2.1.1
 python-mecab-ko==1.3.7
 kagglehub==0.3.4
+hifi-gan==0.0.2

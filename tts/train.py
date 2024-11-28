@@ -58,6 +58,22 @@ def split_samples(samples, eval_ratio=0.1):
     return samples[eval_size:], samples[:eval_size]
 
 
+def validate_dataset(samples):
+        valid_samples = []
+        for sample in samples:
+            try:
+                # 오디오 파일 확인
+                wav = ap.load_wav(sample["audio_file"])
+                mel = ap.melspectrogram(wav)
+                if mel.ndim != 2:  # 멜 스펙트로그램이 2차원인지 확인
+                    print(f"Invalid mel shape for {sample['audio_file']}")
+                    continue
+                valid_samples.append(sample)
+            except Exception as e:
+                print(f"Error processing {sample['audio_file']}: {e}")
+        return valid_samples
+
+
 if __name__ == "__main__":
     # Metadata file
     meta_file = "transcript.v.1.4.txt"
@@ -82,12 +98,11 @@ if __name__ == "__main__":
 
     # Convert characters to CharactersConfig
     characters_config = CharactersConfig(
-        characters=characters,
-        punctuations=punctuations,  # Add punctuations here
-        pad="<pad>",
-        eos="</s>",
-        bos="<s>",
-        blank="<blank>"
+        characters="".join(characters),
+        punctuations="".join(punctuations),
+        pad='_',
+        eos='~',
+        bos='^',
     )
 
     # Split dataset into train and eval
@@ -117,6 +132,10 @@ if __name__ == "__main__":
 
     ap = AudioProcessor.init_from_config(config)
     tokenizer, config = TTSTokenizer.init_from_config(config)
+
+    # 검증된 데이터셋으로 필터링
+    train_samples = validate_dataset(train_samples)
+    eval_samples = validate_dataset(eval_samples)
 
     speaker_manager = SpeakerManager()
     speaker_manager.set_ids_from_data(train_samples + eval_samples, parse_key="speaker_name")
