@@ -19,6 +19,10 @@ AIProject는 높은 효율성과 정확성을 바탕으로 복잡한 문제를 �
 pip install -r requirements.txt
 ```
 
+**모델 다운로드**
+
+Google Drive: [Link](https://drive.google.com/drive/folders/1hcGMAh-Td2u_4zZ1y9H0RZqA7yz80WLh?usp=sharing)
+
 ## 사용 방법
 
 ```bash
